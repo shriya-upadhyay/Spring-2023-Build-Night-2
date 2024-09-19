@@ -1,7 +1,8 @@
 import logo from "./logo.svg";
 import "./App.css";
 import { useState } from "react";
-import { ethers } from "ethers";
+import { ethers} from "ethers";
+import fundme from "./CrowdFund.json";
 
 function App() {
   const [currentAccount, setCurrentAccount] = useState();
@@ -22,11 +23,23 @@ function App() {
     totalPledged: -1,
   });
 
+  const [contract, setContract] = useState();
+  const contractAddress = "0xA647D5123E9A9d5732b26FC626Dc4606231618cf";
+  let signer;
+
   // We need to change these 4 functions to use the new contract
 
   const handleCreate = async (e) => {
     await onClickConnect();
     e.preventDefault();
+
+    if (contract === undefined) {
+      return
+    }
+    let start = parseInt(Date.now() / 1000 + 60 * startBlock);
+    let finish = parseInt(Date.now() / 1000 + 60 * endBlock);
+    let launchGoal = ethers.utils.parseEther(goal);
+    await contract.launch(launchGoal, start, finish);
     // we need to create a campaign
 
     setStartBlock("");
@@ -38,6 +51,14 @@ function App() {
     e.preventDefault();
     await onClickConnect();
     // we need to pledge funds to the campaign
+    if (contract === undefined) {
+      return;
+    }
+
+    const options = { value: ethers.utils.parseEther(pledgeAmount) };
+    await contract.pledge(pledgeId, options);
+
+
 
     setPledgeAmount("");
     setPledgeId("");
@@ -48,6 +69,12 @@ function App() {
     await onClickConnect();
     // we need to claim the funds from the campaign
 
+    if (contract === undefined) {
+      return;
+    }
+    await contract.claim(claimId);
+
+
     setClaimId("");
   };
 
@@ -56,7 +83,7 @@ function App() {
       setViewModle(!viewModle);
       return;
     }
-    if (claimId < 0 || claimId == "") {
+    if (claimId < 0 || claimId == "" || contract === undefined) {
       return;
     }
     await onClickConnect();
@@ -64,6 +91,18 @@ function App() {
 
     // We need to get the campaign from the blockchain and save it to state
 
+    let camp = await contract.getCampaign(claimId);
+
+    setCampaign({
+      id: claimId,
+      startBlock: camp[3],
+      endBlock: camp[4],
+      goal: ethers.utils.formatEther(camp[1]),
+      totalPledged: ethers.utils.formatEther(camp[2]),
+      claimed: camp[5],
+    });
+
+    
     setViewModle(!viewModle);
     setClaimId("");
   };
@@ -80,6 +119,10 @@ function App() {
         if (accounts.length > 0) setCurrentAccount(accounts[0]);
       })
       .catch((e) => console.log(e));
+      signer = provider.getSigner();
+    setContract(
+      new ethers.Contract(contractAddress, fundme.abi, signer)
+    );
   };
 
   return (
